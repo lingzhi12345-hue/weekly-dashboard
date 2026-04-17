@@ -4,8 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
+import calendar
 
 # 页面配置
 st.set_page_config(
@@ -19,14 +20,89 @@ st.set_page_config(
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# ========== 周期配置 ==========
+# 定义月份和周次的映射
+WEEKLY_PERIODS = {
+    "4月": {
+        "第一周": {"start": datetime(2026, 4, 1), "end": datetime(2026, 4, 4), "has_data": False},
+        "第二周": {"start": datetime(2026, 4, 5), "end": datetime(2026, 4, 11), "has_data": True},
+        "第三周": {"start": datetime(2026, 4, 12), "end": datetime(2026, 4, 18), "has_data": True},
+        "第四周": {"start": datetime(2026, 4, 19), "end": datetime(2026, 4, 25), "has_data": False},
+        "第五周": {"start": datetime(2026, 4, 26), "end": datetime(2026, 4, 30), "has_data": False},
+    },
+    "5月": {
+        "第一周": {"start": datetime(2026, 5, 1), "end": datetime(2026, 5, 2), "has_data": False},
+        "第二周": {"start": datetime(2026, 5, 3), "end": datetime(2026, 5, 9), "has_data": False},
+        "第三周": {"start": datetime(2026, 5, 10), "end": datetime(2026, 5, 16), "has_data": False},
+        "第四周": {"start": datetime(2026, 5, 17), "end": datetime(2026, 5, 23), "has_data": False},
+        "第五周": {"start": datetime(2026, 5, 24), "end": datetime(2026, 5, 31), "has_data": False},
+    }
+}
+
 # 侧边栏
 st.sidebar.title("🎮 光遇周报看板")
 st.sidebar.markdown("---")
 
-# 周期选择
-st.sidebar.markdown("### 📅 周期设置")
-week_start = st.sidebar.date_input("本周开始", value=datetime(2026, 4, 5))
-week_end = st.sidebar.date_input("本周结束", value=datetime(2026, 4, 11))
+# 初始化 session state
+if "selected_month" not in st.session_state:
+    st.session_state.selected_month = "4月"
+if "selected_week" not in st.session_state:
+    st.session_state.selected_week = "第二周"
+
+# 周期选择 - 一级：月份
+st.sidebar.markdown("### 📅 周期选择")
+
+# 月份按钮组
+months = list(WEEKLY_PERIODS.keys())
+for month in months:
+    if st.sidebar.button(
+        month, 
+        key=f"month_{month}",
+        use_container_width=True,
+        type="primary" if month == st.session_state.selected_month else "secondary"
+    ):
+        st.session_state.selected_month = month
+        # 切换月份时，重置到该月第一个有数据的周
+        for week in WEEKLY_PERIODS[month]:
+            if WEEKLY_PERIODS[month][week]["has_data"]:
+                st.session_state.selected_week = week
+                break
+        else:
+            st.session_state.selected_week = list(WEEKLY_PERIODS[month].keys())[0]
+
+selected_month = st.session_state.selected_month
+
+# 二级：周次按钮组
+st.sidebar.markdown("**选择周次**")
+weeks = list(WEEKLY_PERIODS[selected_month].keys())
+
+cols = st.sidebar.columns(3)
+for i, week in enumerate(weeks):
+    week_info = WEEKLY_PERIODS[selected_month][week]
+    btn_label = week
+    if not week_info["has_data"]:
+        btn_label = f"{week} (空)"
+    
+    col_idx = i % 3
+    if cols[col_idx].button(
+        btn_label, 
+        key=f"week_{selected_month}_{week}",
+        use_container_width=True,
+        type="primary" if week == st.session_state.selected_week else "secondary"
+    ):
+        st.session_state.selected_week = week
+
+selected_week = st.session_state.selected_week
+
+# 获取选中周期的日期范围
+week_info = WEEKLY_PERIODS[selected_month][selected_week]
+week_start = week_info["start"]
+week_end = week_info["end"]
+
+# 显示当前周期
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"**当前周期：**{selected_month}{selected_week}")
+st.sidebar.markdown(f"📅 {week_start.strftime('%Y-%m-%d')} ~ {week_end.strftime('%Y-%m-%d')}")
 
 # 数据上传
 st.sidebar.markdown("### 📤 数据上传")
@@ -52,7 +128,7 @@ if st.sidebar.button("导出HTML报告"):
 
 # 主标题
 st.title("🎮 光遇内容推广周报")
-st.markdown(f"**周期：{week_start} ~ {week_end}**")
+st.markdown(f"**周期：{selected_month}{selected_week}** ({week_start.strftime('%m/%d')} ~ {week_end.strftime('%m/%d')})")
 st.markdown("---")
 
 # 加载数据函数
@@ -123,7 +199,6 @@ def calc_weekly_metrics(data, week_start, week_end):
     week_end_str = week_end.strftime('%Y-%m-%d')
     
     # 上周日期（往前推7天）
-    from datetime import timedelta
     last_week_start = week_start - timedelta(days=7)
     last_week_end = week_end - timedelta(days=7)
     last_week_start_str = last_week_start.strftime('%Y-%m-%d')
