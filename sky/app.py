@@ -131,8 +131,7 @@ st.title("🎮 光遇内容推广周报")
 st.markdown(f"**周期：{selected_month}{selected_week}** ({week_start.strftime('%m/%d')} ~ {week_end.strftime('%m/%d')})")
 st.markdown("---")
 
-# 加载数据函数
-@st.cache_data
+# 加载数据函数（每次都重新加载，避免缓存问题）
 def load_data():
     data = {}
     
